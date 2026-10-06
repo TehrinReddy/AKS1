@@ -43,6 +43,14 @@ public class StationVm
     public string Station { get; set; }="Buffing"; public string? TyreCode { get; set; } public RetreadJob? Job { get; set; }
     public List<Operator> Operators { get; set; }=[]; public List<Machine> Machines { get; set; }=[]; public StationTransaction? Active { get; set; }
 }
+public class UserSummaryVm
+{
+    public int Id { get; set; }
+    public string Username { get; set; } = "";
+    public List<string> Roles { get; set; } = [];
+    public string DefaultRole { get; set; } = "";
+    public bool CanWriteJobs { get; set; }
+}
 public class FormPreviewVm
 {
     public string FormKey { get; set; } = "tyre-change-slip";

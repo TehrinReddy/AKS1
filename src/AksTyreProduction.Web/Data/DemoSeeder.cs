@@ -1,19 +1,44 @@
 ﻿using AksTyreProduction.Web.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace AksTyreProduction.Web.Data;
 
 public static class DemoSeeder
 {
-    public static async Task SeedAsync(AppDbContext db)
+    public static async Task SeedAsync(AppDbContext db, bool seedDemoData = true, string? bootstrapAdminUsername = null, string? bootstrapAdminPassword = null)
     {
         await db.Database.MigrateAsync();
+        var passwordHasher = new PasswordHasher<AppUser>();
+
+        if (!seedDemoData)
+        {
+            if (!await db.Users.AnyAsync())
+            {
+                if (string.IsNullOrWhiteSpace(bootstrapAdminUsername) || bootstrapAdminUsername.Trim().Length > 50 || !PasswordRequirements.IsStrong(bootstrapAdminPassword))
+                {
+                    throw new InvalidOperationException("The first production account is not configured. Set BootstrapAdmin:Username and a strong BootstrapAdmin:Password before starting the application.");
+                }
+
+                var bootstrapAdmin = new AppUser
+                {
+                    Username = bootstrapAdminUsername.Trim(),
+                    RolesCsv = ApplicationRoles.Administrator,
+                    DefaultRole = ApplicationRoles.Administrator
+                };
+                bootstrapAdmin.PasswordHash = passwordHasher.HashPassword(bootstrapAdmin, bootstrapAdminPassword!);
+                db.Users.Add(bootstrapAdmin);
+                await db.SaveChangesAsync();
+            }
+
+            return;
+        }
 
         var demoUsers = new[]
         {
-            new AppUser { Username = "Admin", PasswordHash = "Admin", RolesCsv = "Administrator,Management,QC", DefaultRole = ApplicationRoles.Administrator },
-            new AppUser { Username = "Manager", PasswordHash = "Manager", RolesCsv = "Management,QC", DefaultRole = ApplicationRoles.Management },
-            new AppUser { Username = "QC", PasswordHash = "QC", RolesCsv = "QC", DefaultRole = ApplicationRoles.QC }
+            new AppUser { Username = "Admin", RolesCsv = "Administrator,Management,QC", DefaultRole = ApplicationRoles.Administrator },
+            new AppUser { Username = "Manager", RolesCsv = "Management,QC", DefaultRole = ApplicationRoles.Management },
+            new AppUser { Username = "QC", RolesCsv = "QC", DefaultRole = ApplicationRoles.QC }
         };
 
         foreach (var desired in demoUsers)
@@ -21,14 +46,9 @@ public static class DemoSeeder
             var existing = await db.Users.FirstOrDefaultAsync(x => x.Username.ToLower() == desired.Username.ToLower());
             if (existing is null)
             {
+                var password = desired.Username;
+                desired.PasswordHash = passwordHasher.HashPassword(desired, password);
                 db.Users.Add(desired);
-            }
-            else
-            {
-                existing.Username = desired.Username;
-                existing.PasswordHash = desired.PasswordHash;
-                existing.RolesCsv = desired.RolesCsv;
-                existing.DefaultRole = desired.DefaultRole;
             }
         }
 
@@ -72,4 +92,5 @@ public static class DemoSeeder
         }; db.MaterialBatches.AddRange(materialBatches);
         await db.SaveChangesAsync();
     }
+
 }

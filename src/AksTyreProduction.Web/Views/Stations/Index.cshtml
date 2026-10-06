@@ -1,5 +1,5 @@
 @model StationVm
-@{ViewData["Title"]=Model.Station;}
+@{ViewData["Title"]=Model.Station;var canWriteJobs=!User.IsInRole(ApplicationRoles.Worker)||User.HasClaim(ApplicationPolicies.PermissionClaimType,ApplicationPolicies.JobsWriteClaim);}
 <div class="page-head"><div><h1>@Model.Station Station</h1><p>Scan tyre → verify job → capture activity → complete</p></div><span class="status-pill">Factory Mode</span></div>
 <form method="get" class="scan-box mb-4"><input type="hidden" name="station" value="@Model.Station"/><label class="form-label fw-bold">SCAN / ENTER AKS TYRE ID</label><div class="input-group"><input name="tyreCode" value="@Model.TyreCode" class="form-control form-control-lg" autofocus placeholder="GTC260001"/><button class="btn btn-primary px-5">Load Job</button></div></form>
 @if(Model.Job!=null)
@@ -22,7 +22,9 @@ else if(Model.Active!=null&&Model.Active.Station!=Model.Station)
 else if(Model.Active==null&&Model.Job.CurrentStage!=Model.Station)
 {<div class="alert alert-warning">This job must complete <strong>@Model.Job.CurrentStage</strong> next. Load that station to continue.</div>}
 else if(Model.Active==null)
-{<form asp-action="Start" method="post"><input type="hidden" name="jobId" value="@Model.Job.Id"/><input type="hidden" name="station" value="@Model.Station"/><input type="hidden" name="tyreCode" value="@Model.TyreCode"/><label class="form-label">Operator</label><select name="operatorId" class="form-select mb-3">@foreach(var op in Model.Operators){<option value="@op.Id">@op.Name · @op.Role · R@op.LabourRate/hr</option>}</select><label class="form-label">Machine (optional)</label><select name="machineId" class="form-select mb-4"><option value="">No machine</option>@foreach(var m in Model.Machines){<option value="@m.Id">@m.Name · @m.Status</option>}</select><button class="btn btn-warning btn-lg w-100">▶ START JOB</button></form>}
+{@if(!canWriteJobs){<div class="alert alert-info">Read-only job access. You can view this station but cannot start or change production activity.</div>}else{<form asp-action="Start" method="post"><input type="hidden" name="jobId" value="@Model.Job.Id"/><input type="hidden" name="station" value="@Model.Station"/><input type="hidden" name="tyreCode" value="@Model.TyreCode"/><label class="form-label">Operator</label><select name="operatorId" class="form-select mb-3">@foreach(var op in Model.Operators){<option value="@op.Id">@op.Name · @op.Role · R@op.LabourRate/hr</option>}</select><label class="form-label">Machine (optional)</label><select name="machineId" class="form-select mb-4"><option value="">No machine</option>@foreach(var m in Model.Machines){<option value="@m.Id">@m.Name · @m.Status</option>}</select><button class="btn btn-warning btn-lg w-100">▶ START JOB</button></form>}}
+else if(!canWriteJobs)
+{<div class="alert alert-info">Read-only job access. An active transaction is open at <strong>@Model.Active.Station</strong>; you cannot complete or change it.</div>}
 else
 {
 <div class="alert alert-warning"><strong>Active since @Model.Active.StartedAt.ToString("HH:mm")</strong><br/>@Model.Active.Station · Rate captured R@Model.Active.LabourRateSnapshot.ToString("N2")/hr</div>

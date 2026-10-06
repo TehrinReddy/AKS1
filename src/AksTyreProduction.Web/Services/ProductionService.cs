@@ -1,10 +1,11 @@
 using AksTyreProduction.Web.Data;
 using AksTyreProduction.Web.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace AksTyreProduction.Web.Services;
 
-public class ProductionService(AppDbContext db)
+public class ProductionService(AppDbContext db, IHttpContextAccessor? httpContextAccessor = null)
 {
     public async Task<Tyre> CreateTyreAsync(string brand, string size, string serial, int customerId, string jobNumber, string treadPattern="", string casingCondition="Good", string application="Commercial", DateTime? estimatedCompletion=null)
     {
@@ -98,6 +99,7 @@ public class ProductionService(AppDbContext db)
         if (job.Status == JobStatus.Dispatched || job.Status == JobStatus.Scrapped)
             throw new InvalidOperationException("Dispatched or scrapped jobs cannot be reopened.");
 
+        var previousStage = job.CurrentStage;
         var stage = string.IsNullOrWhiteSpace(targetStage) ? job.CurrentStage : targetStage;
         if (!Workflow.Stages.Contains(stage, StringComparer.Ordinal) || stage is "Receiving" or "QC Release" or "Dispatch")
         {
@@ -126,7 +128,7 @@ public class ProductionService(AppDbContext db)
         job.ReadyForDispatchAt = null;
         job.CompletedAt = null;
 
-        Audit(job.TyreId, job.Id, "Job reopened", job.CurrentStage, stage, operatorEntity.Name);
+        Audit(job.TyreId, job.Id, "Job reopened", previousStage, $"{stage} ({operatorEntity.Name})");
         await db.SaveChangesAsync();
     }
 
@@ -149,7 +151,7 @@ public class ProductionService(AppDbContext db)
         job.Status = JobStatus.QcPassed; job.CurrentStage = "QC Passed"; job.QcPassedAt=DateTime.Now;
         job.QcOperatorId = qcOperator.Id;
         job.QcOperatorNameSnapshot = qcOperator.Name;
-        Audit(job.TyreId, job.Id, "QC passed", "In Production", "QC Passed", qcOperator.Name);
+        Audit(job.TyreId, job.Id, "QC passed", "In Production", $"QC Passed ({qcOperator.Name})");
         await db.SaveChangesAsync();
     }
 
@@ -192,5 +194,5 @@ public class ProductionService(AppDbContext db)
         await db.SaveChangesAsync();
     }
 
-    private void Audit(int? tyreId, int? jobId, string action, string? oldValue, string? newValue, string? user = null) => db.AuditEvents.Add(new AuditEvent { TyreId = tyreId, RetreadJobId = jobId, User = user ?? "Demo Administrator", Action = action, OldValue = oldValue, NewValue = newValue, OccurredAt = DateTime.Now });
+    private void Audit(int? tyreId, int? jobId, string action, string? oldValue, string? newValue, string? user = null) => db.AuditEvents.Add(new AuditEvent { TyreId = tyreId, RetreadJobId = jobId, User = user ?? httpContextAccessor?.HttpContext?.User.Identity?.Name ?? "System", Action = action, OldValue = oldValue, NewValue = newValue, OccurredAt = DateTime.Now });
 }

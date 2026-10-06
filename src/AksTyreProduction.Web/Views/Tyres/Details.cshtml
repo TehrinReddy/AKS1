@@ -5,7 +5,9 @@
     var current = TyreHistory.SelectRetread(Model, null) ?? Model.RetreadJobs.OrderByDescending(x => x.RetreadNumber).First();
     var selectedRetreadId = ViewBag.SelectedRetreadId is int selectedId && selectedId > 0 ? selectedId : current.Id;
     var selected = TyreHistory.SelectRetread(Model, selectedRetreadId) ?? current;
-    var materials = Db.Materials.Include(x => x.Batches).Where(x => x.Active).ToList();
+    var isWorker = User.IsInRole(ApplicationRoles.Worker);
+    var canWriteJobs = !isWorker || User.HasClaim(ApplicationPolicies.PermissionClaimType, ApplicationPolicies.JobsWriteClaim);
+    var materials = canWriteJobs ? Db.Materials.Include(x => x.Batches).Where(x => x.Active).ToList() : [];
     string R(decimal v) => v.ToString("C2", CultureInfo.GetCultureInfo("en-ZA"));
 }
 
@@ -66,12 +68,15 @@
                 }
             </div>
             <a class="btn btn-sm btn-primary mt-3" asp-controller="Stations" asp-action="Index" asp-route-station="@current.CurrentStage" asp-route-tyreCode="@Model.AksTyreId">Open Factory Station</a>
+            @if (!isWorker)
+            {
             <div class="d-flex flex-wrap gap-2 mt-3">
                 <a class="btn btn-sm btn-outline-primary" asp-controller="Forms" asp-action="Preview" asp-route-id="retread-inspection" asp-route-tyreId="@Model.Id" asp-route-retreadId="@current.Id">Retread Inspection</a>
                 <a class="btn btn-sm btn-outline-primary" asp-controller="Forms" asp-action="Preview" asp-route-id="job-card" asp-route-tyreId="@Model.Id" asp-route-retreadId="@current.Id">Job Card</a>
                 <a class="btn btn-sm btn-outline-primary" asp-controller="Forms" asp-action="Preview" asp-route-id="tyre-action" asp-route-tyreId="@Model.Id" asp-route-retreadId="@current.Id">Tyre Action</a>
                 <a class="btn btn-sm btn-outline-primary" asp-controller="Forms" asp-action="Preview" asp-route-id="vehicle-survey" asp-route-tyreId="@Model.Id" asp-route-retreadId="@current.Id">Vehicle Survey</a>
             </div>
+            }
         </div>
     </div>
 </div>
@@ -89,7 +94,7 @@
                             <strong>@tx.Station · @tx.Result</strong>
                             <small>@tx.StartedAt.ToString("dd MMM HH:mm") @if (tx.EndedAt.HasValue) { <span>to @tx.EndedAt.Value.ToString("dd MMM HH:mm")</span> }</small>
                         </div>
-                        <div class="muted">@tx.Operator.Name · @tx.DurationMinutes min · Labour @R(tx.LabourCost)</div>
+                        <div class="muted">@tx.Operator.Name · @tx.DurationMinutes min @if (!isWorker) { <span>· Labour @R(tx.LabourCost)</span> }</div>
                         <div>@tx.Notes @tx.FailureReason</div>
                         @if (details.Any())
                         {
@@ -110,6 +115,8 @@
         </div>
     </section>
 
+    @if (!isWorker)
+    {
     <section class="card lift-panel">
         <div class="card-header">Actual Cost & Invoice</div>
         <div class="card-body detail-list">
@@ -140,6 +147,7 @@
             }
         </div>
     </section>
+    }
 </div>
 
 <div class="grid-2 mb-4">
@@ -148,7 +156,7 @@
         <div class="card-body">
             <table class="table table-sm">
                 <thead>
-                    <tr><th>Material</th><th>Batch</th><th>Qty</th><th>Captured Cost</th></tr>
+                    <tr><th>Material</th><th>Batch</th><th>Qty</th>@if (!isWorker) { <th>Captured Cost</th> }</tr>
                 </thead>
                 <tbody>
                     @foreach (var u in current.MaterialUsages)
@@ -157,12 +165,14 @@
                             <td>@u.Material.Name</td>
                             <td>@(u.MaterialBatch?.LotNumber ?? "—")</td>
                             <td>@u.Quantity @u.Material.UnitOfMeasure</td>
-                            <td>@R(u.TotalCost)</td>
+                            @if (!isWorker) { <td>@R(u.TotalCost)</td> }
                         </tr>
                     }
                 </tbody>
             </table>
 
+            @if (canWriteJobs)
+            {
             <form asp-controller="Materials" asp-action="Use" method="post" class="row g-2 mt-3">
                 <input type="hidden" name="jobId" value="@current.Id" />
                 <input type="hidden" name="tyreId" value="@Model.Id" />
@@ -171,7 +181,7 @@
                         <option value="">Material...</option>
                         @foreach (var m in materials)
                         {
-                            <option value="@m.Id">@m.Name · @R(m.CurrentUnitCost)/@m.UnitOfMeasure</option>
+                            <option value="@m.Id">@m.Name @if (!isWorker) { <span>· @R(m.CurrentUnitCost)/@m.UnitOfMeasure</span> }</option>
                         }
                     </select>
                 </div>
@@ -191,6 +201,7 @@
                     <button class="btn btn-outline-primary w-100">Add Actual Material Usage</button>
                 </div>
             </form>
+            }
         </div>
     </section>
 
@@ -203,6 +214,8 @@
                     <a href="~/uploads/@p.FileName" target="_blank"><img src="~/uploads/@p.FileName" /></a>
                 }
             </div>
+            @if (canWriteJobs)
+            {
             <form asp-action="Upload" method="post" enctype="multipart/form-data" class="mt-3">
                 <input type="hidden" name="id" value="@Model.Id" />
                 <input type="hidden" name="jobId" value="@current.Id" />
@@ -218,6 +231,7 @@
                 <input class="form-control mb-2" type="file" accept="image/*" name="photo" />
                 <button class="btn btn-outline-secondary">Upload Photo</button>
             </form>
+            }
         </div>
     </section>
 </div>
@@ -243,6 +257,8 @@
             </tbody>
         </table>
 
+        @if (canWriteJobs)
+        {
         <form asp-action="AddRepair" method="post" class="row g-2 mt-3">
             <input type="hidden" name="id" value="@Model.Id" />
             <input type="hidden" name="jobId" value="@current.Id" />
@@ -253,6 +269,7 @@
             <div class="col-md-3"><input class="form-control" name="description" placeholder="Description" /></div>
             <div class="col-md-1"><button class="btn btn-outline-primary">Add</button></div>
         </form>
+        }
     </div>
 </section>
 
@@ -285,7 +302,7 @@
                                 <strong>@tx.Station · @tx.Result</strong>
                                 <small>@tx.StartedAt.ToString("dd MMM HH:mm") @if (tx.EndedAt.HasValue) { <span>to @tx.EndedAt.Value.ToString("dd MMM HH:mm")</span> }</small>
                             </div>
-                            <div class="muted">@tx.Operator.Name · @tx.DurationMinutes min · Labour @R(tx.LabourCost)</div>
+                            <div class="muted">@tx.Operator.Name · @tx.DurationMinutes min @if (!isWorker) { <span>· Labour @R(tx.LabourCost)</span> }</div>
                             <div>@tx.Notes @tx.FailureReason</div>
                             @if (details.Any())
                             {
@@ -304,6 +321,8 @@
                     }
                 </div>
             </div>
+            @if (!isWorker)
+            {
             <div class="col-lg-5">
                 <h6>Cost breakdown</h6>
                 <div class="detail-list">
@@ -332,6 +351,7 @@
                     <p class="muted mb-0">No repairs recorded.</p>
                 }
             </div>
+            }
         </div>
     </div>
 </section>
@@ -341,7 +361,7 @@
     <div class="table-responsive">
         <table class="table mb-0">
             <thead>
-                <tr><th>Retread</th><th>Job</th><th>Received</th><th>Completed</th><th>Result</th><th>Events</th><th>Repairs</th><th>Cost</th><th></th></tr>
+                <tr><th>Retread</th><th>Job</th><th>Received</th><th>Completed</th><th>Result</th><th>Events</th><th>Repairs</th>@if (!isWorker) { <th>Cost</th> }<th></th></tr>
             </thead>
             <tbody>
                 @foreach (var job in Model.RetreadJobs.OrderByDescending(x => x.RetreadNumber))
@@ -354,7 +374,7 @@
                         <td>@job.Status</td>
                         <td>@job.StationTransactions.Count</td>
                         <td>@job.Repairs.Count</td>
-                        <td class="money">@R(job.TotalCost)</td>
+                        @if (!isWorker) { <td class="money">@R(job.TotalCost)</td> }
                         <td>
                             <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@Model.Id" asp-route-retreadId="@job.Id">View</a>
                         </td>
@@ -366,7 +386,7 @@
 </section>
 
 <div class="d-flex gap-2 flex-wrap">
-    @if ((current.Status is JobStatus.Dispatched or JobStatus.Rejected) && !Model.IsScrapped)
+    @if (!isWorker && (current.Status is JobStatus.Dispatched or JobStatus.Rejected) && !Model.IsScrapped)
     {
         <form asp-action="NewRetread" method="post">
             <input type="hidden" name="id" value="@Model.Id" />
@@ -374,7 +394,7 @@
             <button class="btn btn-primary">Start New Retread</button>
         </form>
     }
-    @if (!Model.IsScrapped)
+    @if (!isWorker && !Model.IsScrapped)
     {
         <form asp-action="Scrap" method="post" onsubmit="return confirm('Permanently scrap this tyre?')">
             <input type="hidden" name="id" value="@Model.Id" />

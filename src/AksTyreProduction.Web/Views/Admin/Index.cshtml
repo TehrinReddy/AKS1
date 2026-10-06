@@ -1,5 +1,140 @@
-@{ViewData["Title"]="Operators & Machines";var ops=(List<Operator>)ViewBag.Operators;var machines=(List<Machine>)ViewBag.Machines;var audits=(List<AuditEvent>)ViewBag.Audits;}
-<div class="page-head"><div><h1>Production Resources</h1><p>Manage demo operators and machines; review audited activity</p></div><span class="status-pill">Administrator</span></div>
-<div class="grid-2 mb-4"><div class="card"><div class="card-header">Add Operator</div><div class="card-body"><form asp-action="AddOperator" method="post" class="row g-2"><div class="col-4"><input name="employeeId" class="form-control" required placeholder="OP006"/></div><div class="col-8"><input name="name" class="form-control" required placeholder="Name"/></div><div class="col-7"><input name="role" class="form-control" required placeholder="Role"/></div><div class="col-3"><input name="labourRate" type="number" step="0.01" class="form-control" required placeholder="Rate"/></div><div class="col-2"><button class="btn btn-primary">Add</button></div></form></div></div><div class="card"><div class="card-header">Add Machine</div><div class="card-body"><form asp-action="AddMachine" method="post" class="row g-2"><div class="col-3"><input name="machineId" class="form-control" required placeholder="CUR-04"/></div><div class="col-5"><input name="name" class="form-control" required placeholder="Machine name"/></div><div class="col-3"><input name="type" class="form-control" required placeholder="Type"/></div><div class="col-1"><button class="btn btn-primary">Add</button></div></form></div></div></div>
-<div class="grid-2 mb-4"><div class="card"><div class="card-header">Operators & Current Rates</div><table class="table mb-0"><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Current Rate</th></tr></thead><tbody>@foreach(var op in ops){<tr><td>@op.EmployeeId</td><td>@op.Name</td><td>@op.Role</td><td>R @op.LabourRate.ToString("N2") / hr</td></tr>}</tbody></table></div><div class="card"><div class="card-header">Machines</div><table class="table mb-0"><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th></tr></thead><tbody>@foreach(var m in machines){<tr><td>@m.MachineId</td><td>@m.Name</td><td>@m.Type</td><td><span class="status-pill">@m.Status</span></td></tr>}</tbody></table></div></div>
-<div class="card"><div class="card-header">Audit Trail</div><table class="table mb-0"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Previous</th><th>New Value</th></tr></thead><tbody>@foreach(var a in audits){<tr><td>@a.OccurredAt.ToString("dd MMM HH:mm")</td><td>@a.User</td><td>@a.Action</td><td>@a.OldValue</td><td>@a.NewValue</td></tr>}</tbody></table></div>
+@{
+    ViewData["Title"] = "Operators & Machines";
+    var ops = (List<Operator>)ViewBag.Operators;
+    var machines = (List<Machine>)ViewBag.Machines;
+    var audits = (List<AuditEvent>)ViewBag.Audits;
+    var users = (List<UserSummaryVm>)ViewBag.Users;
+    var allRoles = (string[])ViewBag.AllRoles;
+    var canManageAllAccounts = (bool)ViewBag.CanManageAllAccounts;
+}
+
+<div class="page-head">
+    <div>
+        <div class="eyebrow">ACCESS & OPERATIONS</div>
+        <h1>Users & Production Resources</h1>
+        <p>Manage accounts, operators, machines, and audited activity.</p>
+    </div>
+    <span class="status-pill">@(canManageAllAccounts ? "Administrator" : "Management")</span>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header">Create account</div>
+    <div class="card-body">
+        <form asp-action="CreateUser" method="post" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="newUsername">Username</label>
+                <input id="newUsername" name="username" class="form-control" required maxlength="50" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="newPassword">Temporary password</label>
+                <input id="newPassword" name="password" type="password" class="form-control" required autocomplete="new-password" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="newRole">Account type</label>
+                <select id="newRole" name="role" class="form-select" required>
+                    @foreach (var role in allRoles)
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mb-2">
+                    <input id="newWorkerWrite" name="canWriteJobs" type="checkbox" value="true" class="form-check-input" />
+                    <label class="form-check-label" for="newWorkerWrite">Worker can update jobs</label>
+                </div>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary w-100">Create</button>
+            </div>
+            <div class="col-12 small muted">Workers can read job records. Enable job updates only when the worker should start and complete production activity. Passwords require 12+ characters with uppercase, lowercase, a number, and a symbol.</div>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead><tr><th>User</th><th>Account type</th><th>Job access</th><th>Update access</th><th>Reset password</th></tr></thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    var role = user.Roles.FirstOrDefault() ?? "";
+                    <tr>
+                        <td>@user.Username</td>
+                        <td>@role</td>
+                        <td>@(role == ApplicationRoles.Worker ? (user.CanWriteJobs ? "Read & write" : "Read only") : "All app features")</td>
+                        <td>
+                            <form asp-action="UpdateUserAccess" method="post" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="id" value="@user.Id" />
+                                <select name="role" class="form-select" required>
+                                    @foreach (var availableRole in allRoles)
+                                    {
+                                        <option value="@availableRole" selected="@(role == availableRole)">@availableRole</option>
+                                    }
+                                </select>
+                                <label class="form-check-label d-flex gap-2 align-items-center">
+                                    <input name="canWriteJobs" type="checkbox" value="true" class="form-check-input" checked="@user.CanWriteJobs" />
+                                    Write jobs
+                                </label>
+                                <button class="btn btn-outline-primary">Save access</button>
+                            </form>
+                        </td>
+                        <td>
+                            <form asp-action="ResetUserPassword" method="post" class="d-flex gap-2">
+                                <input type="hidden" name="id" value="@user.Id" />
+                                <input name="password" type="password" class="form-control" required autocomplete="new-password" placeholder="New password" />
+                                <button class="btn btn-outline-warning">Reset</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="grid-2 mb-4">
+    <div class="card">
+        <div class="card-header">Add Operator</div>
+        <div class="card-body">
+            <form asp-action="AddOperator" method="post" class="row g-2">
+                <div class="col-4"><input name="employeeId" class="form-control" required placeholder="OP006" /></div>
+                <div class="col-8"><input name="name" class="form-control" required placeholder="Name" /></div>
+                <div class="col-7"><input name="role" class="form-control" required placeholder="Role" /></div>
+                <div class="col-3"><input name="labourRate" type="number" step="0.01" class="form-control" required placeholder="Rate" /></div>
+                <div class="col-2"><button class="btn btn-primary">Add</button></div>
+            </form>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">Add Machine</div>
+        <div class="card-body">
+            <form asp-action="AddMachine" method="post" class="row g-2">
+                <div class="col-3"><input name="machineId" class="form-control" required placeholder="CUR-04" /></div>
+                <div class="col-5"><input name="name" class="form-control" required placeholder="Machine name" /></div>
+                <div class="col-3"><input name="type" class="form-control" required placeholder="Type" /></div>
+                <div class="col-1"><button class="btn btn-primary">Add</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2 mb-4">
+    <div class="card">
+        <div class="card-header">Operators & Current Rates</div>
+        <table class="table mb-0"><thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Current Rate</th></tr></thead><tbody>
+        @foreach (var op in ops) { <tr><td>@op.EmployeeId</td><td>@op.Name</td><td>@op.Role</td><td>R @op.LabourRate.ToString("N2") / hr</td></tr> }
+        </tbody></table>
+    </div>
+    <div class="card">
+        <div class="card-header">Machines</div>
+        <table class="table mb-0"><thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Status</th></tr></thead><tbody>
+        @foreach (var machine in machines) { <tr><td>@machine.MachineId</td><td>@machine.Name</td><td>@machine.Type</td><td><span class="status-pill">@machine.Status</span></td></tr> }
+        </tbody></table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Audit Trail</div>
+    <table class="table mb-0"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Previous</th><th>New Value</th></tr></thead><tbody>
+    @foreach (var audit in audits) { <tr><td>@audit.OccurredAt.ToString("dd MMM HH:mm")</td><td>@audit.User</td><td>@audit.Action</td><td>@audit.OldValue</td><td>@audit.NewValue</td></tr> }
+    </tbody></table>
+</div>

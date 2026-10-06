@@ -33,7 +33,9 @@ dotnet ef database update --project src/AksTyreProduction.Web --startup-project 
 
 ## Demo access
 
-Internal pages use local cookie authentication. Sign in with username `Admin` and password `Admin`. A role switcher demonstrates Administrator, Management, Receiving, Inspector, Production Operator, QC, and Dispatch responsibilities. Material pricing updates are restricted to Administrator and Management. The customer-safe portal remains publicly accessible and never receives internal cost fields.
+Development seeds local test accounts; sign in with username `Admin` and password `Admin`. Passwords are stored as ASP.NET Core password hashes. Do not use demo accounts in production. Administrators can create Administrator, Management, and Worker accounts. Management has full application read/write access but can create, update, and reset Worker accounts only. Workers are restricted to job pages; their job-write access is off by default and can be enabled by an Administrator or Management account. Workers cannot perform QC release, reopen jobs, manage inventory or pricing, create retreads, scrap tyres, or dispatch. New passwords must be at least 12 characters and include upper/lowercase letters, a number, and a symbol. The role selector switches the active role, and server-side policies restrict access and writes. Login attempts are rate-limited per client IP.
+
+For a first non-development deployment, provide `BootstrapAdmin__Username` and `BootstrapAdmin__Password` through the host's secret configuration. The password must meet the requirements above. These values are used only to create the first Administrator when the user table is empty; the app does not seed demo users or demo data outside Development. Remove the bootstrap secret from the host after that first startup. Full account recovery, MFA, and centralized identity-provider integration are not included yet.
 
 Seeded operators include Peter Mokoena, John Naidoo, Sarah Dlamini, Mike Jacobs, and Thandi Nkosi. Seeded customers include XYZ Logistics, ABC Transport, and Durban Freight Services.
 

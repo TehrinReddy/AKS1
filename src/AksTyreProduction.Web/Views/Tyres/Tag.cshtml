@@ -1,3 +1,36 @@
 @model Tyre
 @{Layout=null;var job=Model.RetreadJobs.OrderByDescending(x=>x.RetreadNumber).First();}
-<!doctype html><html><head><meta charset="utf-8"/><title>Tag @Model.AksTyreId</title><style>body{font-family:Arial;margin:30px}.tag{width:420px;border:3px solid #111;padding:20px;text-align:center}.tag h1{margin:5px;font-size:32px}.tag img{max-width:100%}.meta{display:grid;grid-template-columns:1fr 1fr;text-align:left;gap:7px;font-size:13px;margin-top:12px}.print{margin-top:20px;padding:10px 25px}@@media print{.print{display:none}body{margin:0}.tag{page-break-inside:avoid}}</style></head><body><div class="tag"><strong>AKS TYRE PRODUCTION</strong><h1>@Model.AksTyreId</h1><img src="@Url.Action("Barcode",new{id=Model.Id})" alt="Barcode @Model.AksTyreId"/><div class="meta"><span>Customer</span><strong>@Model.Customer.Name</strong><span>Account</span><strong>@Model.Customer.AccountNumber</strong><span>Tyre</span><strong>@Model.Brand @Model.Size</strong><span>Serial</span><strong>@Model.SerialNumber</strong><span>Job</span><strong>@job.JobNumber</strong><span>Retread</span><strong>#@job.RetreadNumber</strong></div></div><button class="print" onclick="window.print()">Print Tag</button></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Tag @Model.AksTyreId | AKS Tyre Services</title>
+    <style>
+        body{font-family:Arial,sans-serif;margin:30px;color:#15191b}
+        .tag{width:min(420px,100%);border:3px solid #111;padding:18px;text-align:center}
+        .brand-logo{display:block;width:100%;height:auto;margin:0 auto 12px}
+        .tag h1{margin:5px;font-size:32px}
+        .tag-barcode{max-width:100%}
+        .meta{display:grid;grid-template-columns:1fr 1fr;text-align:left;gap:7px;font-size:13px;margin-top:12px}
+        .print{margin-top:20px;padding:10px 25px}
+        @@media print{.print{display:none}body{margin:0}.tag{page-break-inside:avoid}}
+    </style>
+</head>
+<body>
+    <div class="tag">
+        <img class="brand-logo" src="~/images/aks-tyre-services.svg" asp-append-version="true" alt="AKS Tyre Services CC" />
+        <h1>@Model.AksTyreId</h1>
+        <img class="tag-barcode" src="@Url.Action("Barcode",new{id=Model.Id})" alt="Barcode @Model.AksTyreId" />
+        <div class="meta">
+            <span>Customer</span><strong>@Model.Customer.Name</strong>
+            <span>Account</span><strong>@Model.Customer.AccountNumber</strong>
+            <span>Tyre</span><strong>@Model.Brand @Model.Size</strong>
+            <span>Serial</span><strong>@Model.SerialNumber</strong>
+            <span>Job</span><strong>@job.JobNumber</strong>
+            <span>Retread</span><strong>#@job.RetreadNumber</strong>
+        </div>
+    </div>
+    <button class="print" onclick="window.print()">Print Tag</button>
+</body>
+</html>

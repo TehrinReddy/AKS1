@@ -37,11 +37,16 @@ public class RoleController(AppDbContext db) : Controller
             .Select(c => new Claim(c.Type, c.Value, c.ValueType, c.Issuer, c.OriginalIssuer));
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme, ClaimTypes.Name, ClaimTypes.Role);
-        foreach (var validRole in allowed)
-        {
-            identity.AddClaim(new Claim(ClaimTypes.Role, validRole));
-        }
+        identity.AddClaim(new Claim(ClaimTypes.Role, role));
         identity.AddClaim(new Claim("SelectedRole", role));
+        if (role == ApplicationRoles.Worker)
+        {
+            identity.AddClaim(new Claim(ApplicationPolicies.PermissionClaimType, ApplicationPolicies.JobsReadClaim));
+            if (user.CanWriteJobs)
+            {
+                identity.AddClaim(new Claim(ApplicationPolicies.PermissionClaimType, ApplicationPolicies.JobsWriteClaim));
+            }
+        }
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity), new AuthenticationProperties { ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8) });
         return LocalRedirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl);

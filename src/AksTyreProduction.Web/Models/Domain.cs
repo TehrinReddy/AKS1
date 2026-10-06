@@ -11,6 +11,7 @@ public static class ApplicationRoles
     public const string Inspector = "Inspector";
     public const string ProductionOperator = "Production Operator";
     public const string Dispatch = "Dispatch";
+    public const string Worker = "Worker";
 
     public static readonly string[] All =
     [
@@ -20,8 +21,48 @@ public static class ApplicationRoles
         Receiving,
         Inspector,
         ProductionOperator,
-        Dispatch
+        Dispatch,
+        Worker
     ];
+}
+
+public static class ApplicationPolicies
+{
+    public const string JobsRead = "Jobs.Read";
+    public const string JobsWrite = "Jobs.Write";
+    public const string PermissionClaimType = "app:permission";
+    public const string JobsReadClaim = "jobs.read";
+    public const string JobsWriteClaim = "jobs.write";
+}
+
+public static class AccountAccessRules
+{
+    public static readonly string[] AccountTypes =
+    [
+        ApplicationRoles.Administrator,
+        ApplicationRoles.Management,
+        ApplicationRoles.Worker
+    ];
+
+    public static bool CanCreateAccount(string actorRole, string targetRole) =>
+        string.Equals(actorRole, ApplicationRoles.Administrator, StringComparison.OrdinalIgnoreCase)
+            ? AccountTypes.Contains(targetRole, StringComparer.OrdinalIgnoreCase)
+            : string.Equals(actorRole, ApplicationRoles.Management, StringComparison.OrdinalIgnoreCase) &&
+              string.Equals(targetRole, ApplicationRoles.Worker, StringComparison.OrdinalIgnoreCase);
+    public static bool CanManageAccount(string actorRole, string targetRole) =>
+        string.Equals(actorRole, ApplicationRoles.Administrator, StringComparison.OrdinalIgnoreCase) ||
+        (string.Equals(actorRole, ApplicationRoles.Management, StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(targetRole, ApplicationRoles.Worker, StringComparison.OrdinalIgnoreCase));
+}
+
+public static class PasswordRequirements
+{
+    public static bool IsStrong(string? password) =>
+        password is { Length: >= 12 } &&
+        password.Any(char.IsUpper) &&
+        password.Any(char.IsLower) &&
+        password.Any(char.IsDigit) &&
+        password.Any(c => !char.IsLetterOrDigit(c));
 }
 
 public class AppUser
@@ -31,6 +72,7 @@ public class AppUser
     [Required] public string PasswordHash { get; set; } = "";
     [Required] public string RolesCsv { get; set; } = ApplicationRoles.Administrator;
     public string DefaultRole { get; set; } = ApplicationRoles.Administrator;
+    public bool CanWriteJobs { get; set; }
 
     public string SelectedRole
     {
@@ -278,7 +320,7 @@ public class AuditEvent
     public int Id { get; set; }
     public int? TyreId { get; set; }
     public int? RetreadJobId { get; set; }
-    public string User { get; set; } = "Demo Administrator";
+    public string User { get; set; } = "System";
     public string Action { get; set; } = "";
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }

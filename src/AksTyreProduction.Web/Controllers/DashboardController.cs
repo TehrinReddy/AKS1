@@ -1,9 +1,11 @@
 using AksTyreProduction.Web.Data;
 using AksTyreProduction.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AksTyreProduction.Web.Controllers;
+[Authorize(Roles=$"{ApplicationRoles.Administrator},{ApplicationRoles.Management}")]
 public class DashboardController(AppDbContext db) : Controller
 {
     public async Task<IActionResult> Index()

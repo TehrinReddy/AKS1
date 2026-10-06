@@ -2,6 +2,8 @@
 using AksTyreProduction.Web.Data;
 using AksTyreProduction.Web.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +16,38 @@ public class AuthModelTests
     {
         Assert.Contains("Administrator", ApplicationRoles.All);
         Assert.Contains("Management", ApplicationRoles.All);
+        Assert.Contains("Worker", ApplicationRoles.All);
         Assert.Contains("QC", ApplicationRoles.All);
+    }
+
+    [Theory]
+    [InlineData(ApplicationRoles.Administrator, ApplicationRoles.Management, true)]
+    [InlineData(ApplicationRoles.Administrator, ApplicationRoles.Worker, true)]
+    [InlineData(ApplicationRoles.Management, ApplicationRoles.Worker, true)]
+    [InlineData(ApplicationRoles.Management, ApplicationRoles.Management, false)]
+    [InlineData(ApplicationRoles.Worker, ApplicationRoles.Worker, false)]
+    public void AccountCreationFollowsTheAdminManagementWorkerHierarchy(string actorRole, string targetRole, bool expected)
+    {
+        Assert.Equal(expected, AccountAccessRules.CanCreateAccount(actorRole, targetRole));
+    }
+
+    [Theory]
+    [InlineData(ApplicationRoles.Administrator, ApplicationRoles.Management, true)]
+    [InlineData(ApplicationRoles.Management, ApplicationRoles.Worker, true)]
+    [InlineData(ApplicationRoles.Management, ApplicationRoles.Management, false)]
+    [InlineData(ApplicationRoles.Worker, ApplicationRoles.Worker, false)]
+    public void AccountManagementFollowsTheAdminManagementWorkerHierarchy(string actorRole, string targetRole, bool expected)
+    {
+        Assert.Equal(expected, AccountAccessRules.CanManageAccount(actorRole, targetRole));
+    }
+
+    [Fact]
+    public void WorkerJobWriteAccessIsExplicitAndDisabledByDefault()
+    {
+        var worker = new AppUser { RolesCsv = ApplicationRoles.Worker };
+        Assert.False(worker.CanWriteJobs);
+        worker.CanWriteJobs = true;
+        Assert.True(worker.CanWriteJobs);
     }
 
     [Fact]
@@ -25,7 +58,7 @@ public class AuthModelTests
     }
 
     [Fact]
-    public async Task DemoSeederCreatesDocumentedAdminCredentials()
+    public async Task DemoSeederCreatesHashedDevelopmentAdminCredentials()
     {
         await using var connection = new SqliteConnection("DataSource=:memory:");
         await connection.OpenAsync();
@@ -42,9 +75,69 @@ public class AuthModelTests
         await using (var db = new AppDbContext(options))
         {
             var admin = await db.Users.SingleAsync(x => x.Username == "Admin");
-            Assert.Equal("Admin", admin.PasswordHash);
+            Assert.NotEqual("Admin", admin.PasswordHash);
+            Assert.Equal(PasswordVerificationResult.Success, new PasswordHasher<AppUser>().VerifyHashedPassword(admin, admin.PasswordHash, "Admin"));
             Assert.Contains("Administrator", admin.RolesCsv);
         }
+    }
+
+    [Fact]
+    public async Task DevelopmentSeederDoesNotResetExistingUserPasswords()
+    {
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+        await DemoSeeder.SeedAsync(db);
+        var admin = await db.Users.SingleAsync(x => x.Username == "Admin");
+        var hasher = new PasswordHasher<AppUser>();
+        admin.PasswordHash = hasher.HashPassword(admin, "ChangedAdminPassword123!");
+        await db.SaveChangesAsync();
+
+        await DemoSeeder.SeedAsync(db);
+
+        Assert.Equal(PasswordVerificationResult.Success, hasher.VerifyHashedPassword(admin, admin.PasswordHash, "ChangedAdminPassword123!"));
+    }
+
+    [Fact]
+    public async Task ProductionSeederRequiresAndHashesBootstrapAdminCredentials()
+    {
+        await using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => DemoSeeder.SeedAsync(db, seedDemoData: false));
+        await DemoSeeder.SeedAsync(db, seedDemoData: false, "FirstAdmin", "StrongPassword123!");
+
+        var admin = await db.Users.SingleAsync();
+        Assert.Equal("FirstAdmin", admin.Username);
+        Assert.NotEqual("StrongPassword123!", admin.PasswordHash);
+        Assert.Equal(PasswordVerificationResult.Success, new PasswordHasher<AppUser>().VerifyHashedPassword(admin, admin.PasswordHash, "StrongPassword123!"));
+    }
+
+    [Fact]
+    public void SensitiveControllersRequireRolePolicies()
+    {
+        var adminPolicy = typeof(AdminController).GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var dispatchPolicy = typeof(StationsController).GetMethod(nameof(StationsController.Dispatch))!.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var qcPolicy = typeof(StationsController).GetMethod(nameof(StationsController.ReleaseQc))!.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var invoicePolicy = typeof(InvoicesController).GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var jobReadPolicy = typeof(TyresController).GetMethod(nameof(TyresController.Index))!.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var jobWritePolicy = typeof(StationsController).GetMethod(nameof(StationsController.Start))!.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+        var formPolicy = typeof(FormsController).GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
+
+        Assert.Contains(ApplicationRoles.Administrator, adminPolicy.Roles);
+        Assert.Contains(ApplicationRoles.Management, adminPolicy.Roles);
+        Assert.Contains(ApplicationRoles.Management, dispatchPolicy.Roles);
+        Assert.Contains(ApplicationRoles.Dispatch, dispatchPolicy.Roles);
+        Assert.Contains(ApplicationRoles.Management, qcPolicy.Roles);
+        Assert.Contains(ApplicationRoles.QC, qcPolicy.Roles);
+        Assert.Contains(ApplicationRoles.Management, invoicePolicy.Roles);
+        Assert.Equal(ApplicationPolicies.JobsRead, jobReadPolicy.Policy);
+        Assert.Equal(ApplicationPolicies.JobsWrite, jobWritePolicy.Policy);
+        Assert.Contains(ApplicationRoles.Management, formPolicy.Roles);
+        Assert.DoesNotContain(ApplicationRoles.Worker, formPolicy.Roles);
     }
 
     [Fact]

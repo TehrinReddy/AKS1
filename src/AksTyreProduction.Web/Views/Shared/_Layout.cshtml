@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - AKS Tyre</title>
+    <title>@ViewData["Title"] - AKS Tyre Services</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
@@ -11,34 +11,35 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand">
-                <span class="brand-mark">AKS</span>
-                <div>
-                    <strong>TYRE PRODUCTION</strong>
-                    <small>Tracking System</small>
-                </div>
+                <img class="brand-logo" src="~/images/aks-tyre-services.svg" alt="AKS Tyre Services CC" />
             </div>
 
             <nav class="sidebar-nav">
-                <a asp-controller="Dashboard" asp-action="Index"><span class="nav-icon">▦</span><span>Dashboard</span></a>
-                <a asp-controller="Dashboard" asp-action="Statistics"><span class="nav-icon">◫</span><span>Statistics</span></a>
-                <a asp-controller="Tyres" asp-action="Receive"><span class="nav-icon">＋</span><span>Tyre Receiving</span></a>
+                @if (!User.IsInRole(ApplicationRoles.Worker))
+                {
+                    <a asp-controller="Dashboard" asp-action="Index"><span class="nav-icon">▦</span><span>Dashboard</span></a>
+                    <a asp-controller="Dashboard" asp-action="Statistics"><span class="nav-icon">◫</span><span>Statistics</span></a>
+                    <a asp-controller="Tyres" asp-action="Receive"><span class="nav-icon">＋</span><span>Tyre Receiving</span></a>
+                }
                 <a asp-controller="Tyres" asp-action="Index"><span class="nav-icon">⌕</span><span>Tyre Search</span></a>
 
                 <div class="nav-label">PRODUCTION</div>
-                @foreach (var s in Workflow.Stages.Where(x => x != "Receiving" && x != "Dispatch"))
+                @foreach (var s in Workflow.Stages.Where(x => x != "Receiving" && x != "Dispatch" && (!User.IsInRole(ApplicationRoles.Worker) || x != "QC Release")))
                 {
                     <a asp-controller="Stations" asp-action="Index" asp-route-station="@s"><span class="nav-dot"></span><span>@s</span></a>
                 }
-                <a asp-controller="Stations" asp-action="Index" asp-route-station="Dispatch"><span class="nav-icon">⇥</span><span>Dispatch</span></a>
-
-                <div class="nav-label">MANAGEMENT</div>
-                <a asp-controller="Customers" asp-action="Index"><span class="nav-icon">♙</span><span>Customers</span></a>
-                <a asp-controller="Materials" asp-action="Index"><span class="nav-icon">▧</span><span>Materials</span></a>
-                <a asp-controller="Materials" asp-action="Traceability"><span class="nav-icon">⌁</span><span>Batch Traceability</span></a>
-                <a asp-controller="Invoices" asp-action="Index"><span class="nav-icon">R</span><span>Invoices</span></a>
-                <a asp-controller="Forms" asp-action="Index"><span class="nav-icon">▣</span><span>Forms Library</span></a>
-                <a asp-controller="Admin" asp-action="Index"><span class="nav-icon">⚙</span><span>Operators &amp; Machines</span></a>
-                <a asp-controller="CustomerPortal" asp-action="Index"><span class="nav-icon">◎</span><span>Customer Portal</span></a>
+                @if (!User.IsInRole(ApplicationRoles.Worker))
+                {
+                    <a asp-controller="Stations" asp-action="Index" asp-route-station="Dispatch"><span class="nav-icon">⇥</span><span>Dispatch</span></a>
+                    <div class="nav-label">MANAGEMENT</div>
+                    <a asp-controller="Customers" asp-action="Index"><span class="nav-icon">♙</span><span>Customers</span></a>
+                    <a asp-controller="Materials" asp-action="Index"><span class="nav-icon">▧</span><span>Materials</span></a>
+                    <a asp-controller="Materials" asp-action="Traceability"><span class="nav-icon">⌁</span><span>Batch Traceability</span></a>
+                    <a asp-controller="Invoices" asp-action="Index"><span class="nav-icon">R</span><span>Invoices</span></a>
+                    <a asp-controller="Forms" asp-action="Index"><span class="nav-icon">▣</span><span>Forms Library</span></a>
+                    <a asp-controller="Admin" asp-action="Index"><span class="nav-icon">⚙</span><span>Operators &amp; Machines</span></a>
+                    <a asp-controller="CustomerPortal" asp-action="Index"><span class="nav-icon">◎</span><span>Customer Portal</span></a>
+                }
             </nav>
         </aside>
 
@@ -47,13 +48,13 @@
                 <div class="topbar-left">
                     <button class="mobile-menu" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
                     <div class="topbar-copy">
-                        <strong>AKS Manufacturing</strong>
+                        <strong>AKS Tyre Services CC</strong>
                         <small>Signed in as @User.Identity?.Name</small>
                     </div>
                 </div>
 
                 <div class="topbar-actions">
-                    @{var userRoles = User.Claims.Where(x => x.Type == System.Security.Claims.ClaimTypes.Role).Select(x => x.Value).Distinct().OrderBy(x => x).ToArray();
+                    @{var userRoles = (User.Claims.FirstOrDefault(x => x.Type == "AvailableRoles")?.Value ?? User.Claims.FirstOrDefault(x => x.Type == System.Security.Claims.ClaimTypes.Role)?.Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().OrderBy(x => x).ToArray();
                       var selectedRole = User.Claims.FirstOrDefault(x => x.Type == "SelectedRole")?.Value ?? userRoles.FirstOrDefault() ?? ApplicationRoles.Administrator;}
                     <form asp-controller="Role" asp-action="Switch" method="post" class="role-selector">
                         <span class="online"></span>
